@@ -12,6 +12,28 @@ https://docs.djangoproject.com/en/{{ docs_version }}/ref/settings/
 
 from pathlib import Path
 
+import distutils.util
+import os
+
+def get_setting(setting, *args, list_sep=None, fxn=None):
+    """
+    Function to retrieve value for specified setting.
+    """
+    value = os.getenv(setting, *args)
+    if list_sep is not None:
+        value = [e.strip() for e in value.split(list_sep) if e.strip()]
+    if value is not None and fxn == bool:
+        try:
+            value = bool(distutils.util.strtobool(value))
+        except AttributeError:
+            value = [bool(distutils.util.strtobool(e)) for e in value]
+    elif value is not None and fxn is not None:
+        try:
+            value = fxn(value)
+        except ValueError as e:
+            value = list(map(fxn, value))
+    return value
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
