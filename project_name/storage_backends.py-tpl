@@ -1,0 +1,20 @@
+from django.conf import settings
+from storages.backends.s3boto3 import S3Boto3Storage
+
+try:
+    DATA_STORAGE_LOCATION = settings.DATA_STORAGE_LOCATION
+except AttributeError:
+    DATA_STORAGE_LOCATION = '{{ project_name }}/data'
+
+try:
+    STATIC_STORAGE_LOCATION = settings.STATIC_STORAGE_LOCATION
+except AttributeError:
+    STATIC_STORAGE_LOCATION = '{{ project_name }}/static'
+
+class DataStorage(S3Boto3Storage):
+    location = DATA_STORAGE_LOCATION
+    file_overwrite = False
+
+class StaticStorage(S3Boto3Storage):
+    location = STATIC_STORAGE_LOCATION
+    file_overwrite = True

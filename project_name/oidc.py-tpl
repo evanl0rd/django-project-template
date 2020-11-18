@@ -1,0 +1,52 @@
+from mozilla_django_oidc import auth
+from mozilla_django_oidc.contrib import drf
+from mozilla_django_oidc.utils import import_from_settings, parse_www_authenticate_header
+from requests.exceptions import HTTPError
+from rest_framework import exceptions
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+class OIDCAuthenticationBackend(auth.OIDCAuthenticationBackend):
+    def verify_claims(self, claims):
+        """
+        Verify the provided claims to decide if authentication should be allowed.
+        """
+        logger.info('Verifying OIDC claims.')
+        return 'sub' in claims
+
+class OIDCAuthentication(drf.OIDCAuthentication):
+    def authenticate(self, request):
+        """
+        Authenticate the request and return a tuple of (user, token) or None
+        if there was no authentication attempt.
+        """
+        access_token = self.get_access_token(request)
+
+        if not access_token:
+            return None
+
+        try:
+            user = self.backend.get_or_create_user(access_token, None, None)
+        except HTTPError as exc:
+            resp = exc.response
+
+            # if the oidc provider returns 401, it means the token is invalid.
+            # in that case, we want to return the upstream error message (which
+            # we can get from the www-authentication header) in the response.
+            if resp.status_code == 401 and 'www-authenticate' in resp.headers:
+                data = parse_www_authenticate_header(resp.headers['www-authenticate'])
+                raise exceptions.AuthenticationFailed(data)
+
+            # for all other http errors, just re-raise the exception.
+            raise
+        except SuspiciousOperation as exc:
+            logger.info('Login failed: %s', exc)
+            raise exceptions.AuthenticationFailed('Login failed')
+
+        if not user:
+            msg = 'Login failed: No user found for the given access token.'
+            raise exceptions.AuthenticationFailed(msg)
+
+        return user, access_token
